@@ -32,12 +32,14 @@ def main():
     parser.add_argument('--min-seq-length', type=int, default=10, help="Minimum sequence length to process.")
     parser.add_argument('--check-reverse-complement', action='store_true', help="Check reverse complement sequence variations.")
     parser.add_argument('--use-cuda', action='store_true', help="Use CUDA if available.")
-    parser.add_argument('--input', type=str, default=INPUT_PATH, help="Path to input files.")
     parser.add_argument('--output', type=str, default=OUTPUT_PATH, help="Path to save output files.")
+
+    input_group = parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument('--input', type=str, help="Path to directory with input FASTA files.")
+    input_group.add_argument('--input-file', type=str, help="Path to a single FASTA input file.")
+
     args = parser.parse_args()
 
-    # Prepare paths
-    input_path = pathlib.Path(args.input)
     output_path = pathlib.Path(args.output)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -54,18 +56,32 @@ def main():
         use_cuda=args.use_cuda,
     )
 
-    # Initialize sequence variations
     sequence_variations = [SequenceVariationNormal()]
     if args.check_reverse_complement:
         sequence_variations.append(SequenceVariationReverseComplement())
 
     # Prepare input files
     prediction_input_files = []
-    for file_path in input_path.iterdir():
-        if file_path.is_file():
-            prediction_input_files.append(
-                PredictionInputFileFromFilesystem(file_path.name, file_path)
-            )
+
+    if args.input_file:
+        input_file_path = pathlib.Path(args.input_file)
+        if not input_file_path.is_file():
+            raise FileNotFoundError(f"Input file '{input_file_path}' does not exist or is not a file.")
+        prediction_input_files.append(
+            PredictionInputFileFromFilesystem(input_file_path.name, input_file_path)
+        )
+    else:
+        input_dir_path = pathlib.Path(args.input)
+        if not input_dir_path.is_dir():
+            raise NotADirectoryError(f"Input path '{input_dir_path}' is not a directory.")
+        for file_path in input_dir_path.iterdir():
+            if file_path.is_file():
+                prediction_input_files.append(
+                    PredictionInputFileFromFilesystem(file_path.name, file_path)
+                )
+
+    if not prediction_input_files:
+        raise ValueError("No input FASTA files found to process.")
 
     prediction_input = PredictionInput(
         zdnabert_model,
