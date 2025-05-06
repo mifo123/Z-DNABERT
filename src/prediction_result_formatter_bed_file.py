@@ -40,8 +40,10 @@ class PredictionResultFormatterBedFile(PredictionResultFormatter):
             candidate_length = candidate.shape[0]
             if candidate_length>minimum_sequence_length:
                 bed_name = '{},{},{}'.format(model_params_as_string, seq_name, label_id)
-                
+                confidence = prediction_result.confidence_scores
+
                 candidate_start, candidate_end = sequence_variation.derive_candidate_start_and_end(seq_len, candidate)
-                yield '0\t{start}\t{end}\t{name}'.format(start=candidate_start, end=candidate_end, name=bed_name)
+                avg_conf = np.mean(confidence[candidate_start:candidate_end])
+                yield '0\t{start}\t{end}\t{name}\t{confidence}'.format(start=candidate_start, end=candidate_end, name=bed_name, confidence=avg_conf)
                 
                 label_id += 1

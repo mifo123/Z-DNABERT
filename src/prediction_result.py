@@ -12,6 +12,7 @@ class PredictionResult:
         seq_len: int,
         labeled,
         max_label: int,
+        scores=None
     ):
         self.model_name = model_name
         self.model_confidence_threshold = model_confidence_threshold
@@ -22,6 +23,7 @@ class PredictionResult:
         self.seq_len = seq_len
         self.labeled = labeled
         self.max_label = max_label
+        self.confidence_scores = scores
     
     def get_model_params_as_string(self) -> str:
         return 'm={},mct={},msl={}'.format(self.model_name, self.model_confidence_threshold, self.minimum_sequence_length)

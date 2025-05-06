@@ -64,5 +64,6 @@ class PredictionRunner:
             seq_len,
             labeled,
             max_label,
+            scores=stitched_preds,
         )
         

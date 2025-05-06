@@ -66,10 +66,7 @@ class ZdnabertModel:
             for seq_piece in progress_bar(seq_pieces, 'prediction on sequence pieces'):
                 input_ids = torch.LongTensor(self.tokenizer.encode(' '.join(seq_piece), add_special_tokens=False))
                 input_ids_unsqueezed = None
-                if self.using_cuda:
-                    input_ids_unsqueezed = input_ids.cuda().unsqueeze(0)
-                else:
-                    input_ids_unsqueezed = input_ids.cpu().unsqueeze(0)
+                input_ids_unsqueezed = input_ids.cpu().unsqueeze(0)
                 outputs = torch.softmax(self.model(input_ids_unsqueezed)[-1], axis = -1)[0,:,1]
                 preds.append(outputs.cpu().numpy())
         return preds
