@@ -122,3 +122,7 @@ webcolors==24.11.1
 webencodings==0.5.1
 websocket-client==1.8.0
 widgetsnbextension==4.0.13
+
+fastapi~=0.115.12
+uvicorn
+python-multipart

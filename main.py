@@ -12,20 +12,64 @@ from src.sequence_variation_reverse_complement import SequenceVariationReverseCo
 from src.prediction_result_formatter_bed_file import PredictionResultFormatterBedFile
 from src.zdnabert_model_downloader import ZdnabertModelDownloader
 
-# Define default paths
 MODEL_DOWNLOAD_PATH = './pytorch_models'
 INPUT_PATH = './input'
 OUTPUT_PATH = './output'
 
-# CLI entry point
+
+def run_zdnabert_analysis(
+    model: str,
+    input_fasta: pathlib.Path,
+    confidence_threshold: float = 0.5,
+    min_seq_length: int = 10,
+    check_reverse_complement: bool = False,
+    use_cuda: bool = False,
+) -> list[str]:
+    zdnabert_model_downloader = ZdnabertModelDownloader()
+    zdnabert_model_downloader.download_models(MODEL_DOWNLOAD_PATH)
+    zdnabert_model_downloader.download_metas(MODEL_DOWNLOAD_PATH)
+
+    zdnabert_model = ZdnabertModel(
+        os.path.join(MODEL_DOWNLOAD_PATH, model),
+        model_name=model,
+        model_confidence_threshold=confidence_threshold,
+        minimum_sequence_length=min_seq_length,
+        use_cuda=use_cuda,
+    )
+
+    sequence_variations = [SequenceVariationNormal()]
+    if check_reverse_complement:
+        sequence_variations.append(SequenceVariationReverseComplement())
+
+    if not input_fasta.is_file():
+        raise FileNotFoundError(f"{input_fasta} is not a file.")
+
+    prediction_input_file = PredictionInputFileFromFilesystem(input_fasta.name, input_fasta)
+
+    prediction_input = PredictionInput(
+        zdnabert_model,
+        [prediction_input_file],
+        sequence_variations,
+    )
+
+    prediction_runner = PredictionRunner()
+    formatter = PredictionResultFormatterBedFile()
+
+    results = []
+    for prediction_result in prediction_runner.run([prediction_input]):
+        results.extend(formatter.format(prediction_result))
+
+    return results
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run Z-DNABERT predictions on input sequences.")
     parser.add_argument(
         '--model',
         type=str,
         required=True,
-        choices=["HG_chipseq", "HG_kouzine", "MM_chipseq", "MM_kouzine"],
-        help="Name of the model to use. Choices are: HG_chipseq, HG_kouzine, MM_chipseq, MM_kouzine."
+        choices=["HG_chipseq", "HG_kouzine", "MM_curax", "MM_kouzine"],
+        help="Name of the model to use. Choices are: HG_chipseq, HG_kouzine, MM_curax, MM_kouzine."
     )
 
     parser.add_argument('--confidence-threshold', type=float, default=0.5, help="Model confidence threshold.")
@@ -43,24 +87,10 @@ def main():
     output_path = pathlib.Path(args.output)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    # Download and initialize the model
-    zdnabert_model_downloader = ZdnabertModelDownloader()
-    zdnabert_model_downloader.download_models(MODEL_DOWNLOAD_PATH)
-    zdnabert_model_downloader.download_metas(MODEL_DOWNLOAD_PATH)
-
-    zdnabert_model = ZdnabertModel(
-        os.path.join(MODEL_DOWNLOAD_PATH, args.model),
-        model_name=args.model,
-        model_confidence_threshold=args.confidence_threshold,
-        minimum_sequence_length=args.min_seq_length,
-        use_cuda=args.use_cuda,
-    )
-
     sequence_variations = [SequenceVariationNormal()]
     if args.check_reverse_complement:
         sequence_variations.append(SequenceVariationReverseComplement())
 
-    # Prepare input files
     prediction_input_files = []
 
     if args.input_file:
@@ -81,7 +111,19 @@ def main():
                 )
 
     if not prediction_input_files:
-        raise ValueError("No input FASTA files found to process.")
+        raise ValueError("No input files found.")
+
+    zdnabert_model_downloader = ZdnabertModelDownloader()
+    zdnabert_model_downloader.download_models(MODEL_DOWNLOAD_PATH)
+    zdnabert_model_downloader.download_metas(MODEL_DOWNLOAD_PATH)
+
+    zdnabert_model = ZdnabertModel(
+        os.path.join(MODEL_DOWNLOAD_PATH, args.model),
+        model_name=args.model,
+        model_confidence_threshold=args.confidence_threshold,
+        minimum_sequence_length=args.min_seq_length,
+        use_cuda=args.use_cuda,
+    )
 
     prediction_input = PredictionInput(
         zdnabert_model,
@@ -93,7 +135,6 @@ def main():
     prediction_result_formatter_bed_file = PredictionResultFormatterBedFile()
     prediction_runner = PredictionRunner()
 
-    # Run predictions and save outputs
     now_time_as_string_for_file_name = time.strftime("%Y_%m_%d,%H_%M_%S")
     for prediction_result in prediction_runner.run(prediction_inputs, progress_bar=tqdm):
         bed_file_name = prediction_result_formatter_bed_file.file_name_variation(prediction_result, now_time_as_string_for_file_name)
