@@ -1,0 +1,44 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS špecifické
+.DS_Store
+
+# Virtual env
+.venv/
+
+# GitHub workflows
+.github/
+
+.git/
+.gitignore
+
+# Pytest cache
+.pytest_cache/
+
+# Build artefakty a archívy
+*.tar.gz
+*.zip
+*.egg-info/
+
+# Notebooky
+*.ipynb
+
+# Adresáre projektu, ktoré nechceš v image
+beds/
+input/
+pytorch_models/
+tests/
+
+# Nix shell
+shell.nix
+
+# Lokálne skripty
+run.sh

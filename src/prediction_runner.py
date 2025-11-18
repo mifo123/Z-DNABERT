@@ -48,11 +48,11 @@ class PredictionRunner:
         seq = sequence_variation.create_variation(input_seq)
         seq_len = len(seq)
 
-        model.load()
         seq_pieces = model.kmer_and_split_seq(seq)
         preds = model.run_prediction(seq_pieces, progress_bar)
         stitched_preds = model.stitch_preds(preds, progress_bar)
         labeled, max_label = model.label_stitched_preds(stitched_preds)
+        print("[DEBUG] label_stitched_preds finished, max_label=", max_label)
         
         return PredictionResult(
             model.model_name,

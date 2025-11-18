@@ -36,6 +36,7 @@ def run_zdnabert_analysis(
         minimum_sequence_length=min_seq_length,
         use_cuda=use_cuda,
     )
+    zdnabert_model.load()
 
     sequence_variations = [SequenceVariationNormal()]
     if check_reverse_complement:
@@ -56,8 +57,17 @@ def run_zdnabert_analysis(
     formatter = PredictionResultFormatterBedFile()
 
     results = []
+    print("[DEBUG] Starting prediction_runner.run()")
     for prediction_result in prediction_runner.run([prediction_input]):
+        print(f"[DEBUG] Got PredictionResult "
+              f"file={prediction_result.file_name} "
+              f"seq={prediction_result.seq_record_name} "
+              f"len={prediction_result.seq_len}")
+        print("[DEBUG] Entering formatter.format()")
+        bed_chunk = list(formatter.format(prediction_result))
+        print(f"[DEBUG] formatter.format() returned {len(bed_chunk)} lines")
         results.extend(formatter.format(prediction_result))
+        print("[DEBUG] Finished prediction_runner.run() / formatting")
 
     return results
 

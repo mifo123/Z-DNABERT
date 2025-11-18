@@ -1,19 +1,13 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
-from fastapi.responses import PlainTextResponse, JSONResponse
+import traceback
 import tempfile
 import pathlib
-import traceback
+import asyncio
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.responses import PlainTextResponse
+
 from main import run_zdnabert_analysis
 
 app = FastAPI()
-
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    print("Internal Server Error:")
-    traceback.print_exc()
-    return JSONResponse(status_code=500, content={"detail": str(exc)})
-
 
 @app.post("/analyse", response_class=PlainTextResponse)
 async def analyse(
@@ -24,24 +18,19 @@ async def analyse(
     use_cuda: bool = Form(False),
     fasta_file: UploadFile = File(...)
 ):
-    print(f"Received analysis request with parameters:")
-    print(f"  model = {model}")
-    print(f"  confidence_threshold = {confidence_threshold}")
-    print(f"  min_seq_length = {min_seq_length}")
-    print(f"  check_reverse_complement = {check_reverse_complement}")
-    print(f"  use_cuda = {use_cuda}")
+    tmp_fasta_path = None
+    try:
+        contents = await fasta_file.read()
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".fasta") as tmp_fasta:
-        try:
-            contents = await fasta_file.read()
+        if not contents.strip():
+            raise HTTPException(status_code=400, detail="Uploaded FASTA file is empty.")
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".fasta") as tmp_fasta:
             tmp_fasta.write(contents)
             tmp_fasta_path = pathlib.Path(tmp_fasta.name)
 
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Failed to read uploaded file: {e}")
-
-    try:
-        bed_lines = run_zdnabert_analysis(
+        bed_lines = await asyncio.to_thread(
+            run_zdnabert_analysis,
             model=model,
             input_fasta=tmp_fasta_path,
             confidence_threshold=confidence_threshold,
@@ -53,19 +42,22 @@ async def analyse(
         if not bed_lines:
             return "No predictions found."
 
-        print("\n".join(bed_lines))
         return "\n".join(bed_lines)
 
     except FileNotFoundError as e:
+        print(f"[FileNotFoundError] {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
     except ValueError as e:
         print("TRACEBACK:")
-        print(traceback.format_exc())
+        traceback.print_exc()
         raise HTTPException(status_code=422, detail=str(e))
+
     except Exception as e:
         print("TRACEBACK:")
-        print(traceback.format_exc())
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
 
     finally:
-        tmp_fasta_path.unlink(missing_ok=True)
+        if tmp_fasta_path and tmp_fasta_path.exists():
+            tmp_fasta_path.unlink(missing_ok=True)

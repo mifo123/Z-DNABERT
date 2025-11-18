@@ -3,5 +3,9 @@ output/
 pytorch_models/
 .ipynb_checkpoints/
 venv/
+.venv
 
 .DS_Store
+.idea
+__pycache__
+*.tar.gz
