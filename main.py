@@ -64,9 +64,11 @@ def run_zdnabert_analysis(
               f"seq={prediction_result.seq_record_name} "
               f"len={prediction_result.seq_len}")
         print("[DEBUG] Entering formatter.format()")
-        bed_chunk = list(formatter.format(prediction_result))
-        print(f"[DEBUG] formatter.format() returned {len(bed_chunk)} lines")
-        results.extend(formatter.format(prediction_result))
+        count = 0
+        for line in formatter.format(prediction_result):
+            results.append(line)
+            count += 1
+        print(f"[DEBUG] formatter.format() returned {count} lines")
         print("[DEBUG] Finished prediction_runner.run() / formatting")
 
     return results

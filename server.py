@@ -36,7 +36,7 @@ async def analyse(
             confidence_threshold=confidence_threshold,
             min_seq_length=min_seq_length,
             check_reverse_complement=check_reverse_complement,
-            use_cuda=use_cuda
+            use_cuda=False
         )
 
         if not bed_lines:

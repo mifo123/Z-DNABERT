@@ -31,19 +31,38 @@ class PredictionResultFormatterBedFile(PredictionResultFormatter):
         seq_name = sequence_variation.get_title()
         minimum_sequence_length = prediction_result.minimum_sequence_length
         seq_len = prediction_result.seq_len
-        max_label = prediction_result.max_label
-        labeled = prediction_result.labeled
-        
-        label_id = 1
-        for label in range(1, max_label+1):
-            candidate = np.where(labeled == label)[0]
-            candidate_length = candidate.shape[0]
-            if candidate_length>minimum_sequence_length:
-                bed_name = '{},{},{}'.format(model_params_as_string, seq_name, label_id)
-                confidence = prediction_result.confidence_scores
+        labels = np.asarray(prediction_result.labeled)
+        confidence = np.asarray(prediction_result.confidence_scores)
+        assert labels.shape == confidence.shape
+        mask = labels > 0
+        if not mask.any():
+            return
+        mask_int = mask.astype(np.int8)
+        diff = np.diff(mask_int)
+        starts = np.where(diff == 1)[0] + 1
+        ends = np.where(diff == -1)[0] + 1
+        if mask[0]:
+            starts = np.r_[0, starts]
+        if mask[-1]:
+            ends = np.r_[ends, labels.shape[0]]
 
-                candidate_start, candidate_end = sequence_variation.derive_candidate_start_and_end(seq_len, candidate)
-                avg_conf = np.mean(confidence[candidate_start:candidate_end])
-                yield '0\t{start}\t{end}\t{name}\t{confidence}'.format(start=candidate_start, end=candidate_end, name=bed_name, confidence=avg_conf)
-                
-                label_id += 1
+        label_id = 1
+        for start_idx, end_idx in zip(starts, ends):
+            candidate_length = end_idx - start_idx
+
+            if candidate_length <= minimum_sequence_length:
+                continue
+
+            candidate_indices = np.arange(start_idx, end_idx, dtype=np.int64)
+            candidate_start, candidate_end = sequence_variation.derive_candidate_start_and_end(
+                seq_len,
+                candidate_indices,
+            )
+
+            avg_conf = float(np.mean(confidence[candidate_start:candidate_end]))
+
+            bed_name = '{},{},{}'.format(model_params_as_string, seq_name,label_id)
+
+            yield f'0\t{candidate_start}\t{candidate_end}\t{bed_name}\t{avg_conf}'
+
+            label_id += 1

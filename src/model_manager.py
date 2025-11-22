@@ -1,5 +1,6 @@
 import os
-import subprocess
+import shutil
+import hashlib
 import logging
 
 class ModelManager:
@@ -11,12 +12,18 @@ class ModelManager:
         hash2 = self.hash_file(target_path)
         if hash1 != hash2:
             self.logger.info('copying file to input directory')
-            subprocess.run(['cp', source_path, target_path])
+            target_dir = os.path.dirname(target_path)
+            if target_dir:
+                os.makedirs(target_dir, exist_ok=True)
+            shutil.copy2(source_path, target_path)
         else:
-            self.logger.info('file hasn\'t changed')
-    
+            self.logger.info("file hasn't changed")
+
     def hash_file(self, file_path: str):
-        if os.path.exists(file_path) == False:
+        if not os.path.exists(file_path):
             return None
-        
-        return subprocess.run(['shasum', file_path], stdout=subprocess.PIPE).stdout[:40]
+        h = hashlib.sha1()
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                h.update(chunk)
+        return h.hexdigest().encode()[:40]

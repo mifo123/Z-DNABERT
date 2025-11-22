@@ -10,7 +10,7 @@ class ZdnabertModel:
     using_cuda: bool
     tokenizer: BertTokenizer
     model: PreTrainedModel
-    
+
     def __init__(
         self,
         data_path: str,
@@ -28,28 +28,34 @@ class ZdnabertModel:
         self.minimum_sequence_length = minimum_sequence_length
         self.use_cuda = use_cuda
 
+        self.using_cuda = False
+        self.device = torch.device("cpu")  # default
+
     def load(self) -> None:
         self.prepare_bert_model()
         self.check_cuda()
-        self.prepare_cuda()
+        self.prepare_device()
 
     def prepare_bert_model(self) -> None:
         self.tokenizer = BertTokenizer.from_pretrained(self.data_path)
         self.model = BertForTokenClassification.from_pretrained(self.data_path)
 
     def check_cuda(self) -> None:
-        if self.use_cuda:
-            self.using_cuda = torch.cuda.is_available()
-            if not self.using_cuda:
-                raise RuntimeError('cuda is set to be used but not available')
+        if self.use_cuda and torch.cuda.is_available():
+            self.using_cuda = True
+            self.device = torch.device("cuda")
+            self.logger.info("Using CUDA for ZDNABERT model.")
         else:
+            if self.use_cuda and not torch.cuda.is_available():
+                self.logger.warning(
+                    "CUDA was requested but is not available. Falling back to CPU."
+                )
             self.using_cuda = False
-    
-    def prepare_cuda(self) -> None:
-        if self.using_cuda:
-            self.model.cuda()
-        else:
-            self.model.cpu()
+            self.device = torch.device("cpu")
+            self.logger.info("Using CPU for ZDNABERT model.")
+
+    def prepare_device(self) -> None:
+        self.model.to(self.device)
 
     def kmer_and_split_seq(self, seq: str) -> list:
         kmer_seq = self.sequence_helper.seq2kmer(seq, 6)
@@ -62,13 +68,15 @@ class ZdnabertModel:
         progress_bar = tqdm,
     ) -> list:
         preds = []
+        self.model.eval()
         with torch.no_grad():
             for seq_piece in progress_bar(seq_pieces, 'prediction on sequence pieces'):
-                input_ids = torch.LongTensor(self.tokenizer.encode(' '.join(seq_piece), add_special_tokens=False))
-                input_ids_unsqueezed = None
-                input_ids_unsqueezed = input_ids.cpu().unsqueeze(0)
-                outputs = torch.softmax(self.model(input_ids_unsqueezed)[-1], axis = -1)[0,:,1]
-                preds.append(outputs.cpu().numpy())
+                input_ids = torch.LongTensor(self.tokenizer.encode(' '.join(seq_piece), add_special_tokens=False)).to(self.device)
+                input_ids_unsqueezed = input_ids.unsqueeze(0)  # shape [1, L]
+                outputs = self.model(input_ids_unsqueezed)
+                logits = outputs.logits  # shape [1, L, num_labels]
+                probs = torch.softmax(logits, dim=-1)[0, :, 1]
+                preds.append(probs.detach().cpu().numpy())
         return preds
 
     def stitch_preds(

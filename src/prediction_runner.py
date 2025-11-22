@@ -21,21 +21,20 @@ class PredictionRunner:
             sequence_variations = prediction_input.get_sequence_variations()
             for prediction_input_file in progress_bar(prediction_input_files, 'files'):
                 file_name = prediction_input_file.file_name
-                file_handle = prediction_input_file.open()
-                for seq_record in progress_bar(SeqIO.parse(file_handle, 'fasta'), 'records'):
-                    seq = str(seq_record.seq)
-                    seq_record_name = seq_record.name
-                    for sequence_variation in progress_bar(sequence_variations, 'sequences'):
-                        yield self.run_on_prediction_input_seq_variation(
-                            model,
-                            seq,
-                            sequence_variation,
-                            file_name,
-                            seq_record_name,
-                            progress_bar,
-                        )
-                prediction_input_file.close()
-    
+                with prediction_input_file.open() as file_handle:
+                    for seq_record in progress_bar(SeqIO.parse(file_handle, 'fasta'), 'records'):
+                        seq = str(seq_record.seq)
+                        seq_record_name = seq_record.name
+                        for sequence_variation in progress_bar(sequence_variations, 'sequences'):
+                            yield self.run_on_prediction_input_seq_variation(
+                                model,
+                                seq,
+                                sequence_variation,
+                                file_name,
+                                seq_record_name,
+                                progress_bar,
+                            )
+
     def run_on_prediction_input_seq_variation(
         self,
         model: ZdnabertModel,
