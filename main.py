@@ -2,6 +2,7 @@ import os
 import pathlib
 import argparse
 import time
+import traceback
 
 from tqdm.auto import tqdm
 
@@ -13,6 +14,7 @@ from src.sequence_variation_normal import SequenceVariationNormal
 from src.sequence_variation_reverse_complement import SequenceVariationReverseComplement
 from src.prediction_result_formatter_bed_file import PredictionResultFormatterBedFile
 from src.zdnabert_model_downloader import ZdnabertModelDownloader
+from src.status_file import update_status_file
 
 MODEL_DOWNLOAD_PATH = "./pytorch_models"
 INPUT_PATH = "./input"
@@ -59,6 +61,8 @@ def run_zdnabert_analysis(
     min_seq_length: int = 10,
     check_reverse_complement: bool = False,
     use_cuda: bool = False,
+    status_path: pathlib.Path | None = None,
+    sequence_length: int | None = None,
 ) -> list[str]:
     # zaisti, že modely sú stiahnuté (len prvýkrát v procese)
     ensure_models_ready()
@@ -92,9 +96,15 @@ def run_zdnabert_analysis(
     prediction_runner = PredictionRunner()
     formatter = PredictionResultFormatterBedFile()
 
+    # vyber progress bar podľa toho, či máme status_path
+    if status_path is not None:
+        progress_bar = make_status_progress_bar(status_path)
+    else:
+        progress_bar = tqdm
+
     results: list[str] = []
     print("[DEBUG] Starting prediction_runner.run()")
-    for prediction_result in prediction_runner.run([prediction_input]):
+    for prediction_result in prediction_runner.run([prediction_input], progress_bar):
         print(
             f"[DEBUG] Got PredictionResult "
             f"file={prediction_result.file_name} "
@@ -110,6 +120,82 @@ def run_zdnabert_analysis(
         print("[DEBUG] Finished prediction_runner.run() / formatting")
 
     return results
+
+def _normalize_stage_name(desc: str | None) -> str:
+    if not desc:
+        return "unknown"
+
+    d = desc.lower()
+    if "prediction on sequence pieces" in d:
+        return "prediction_pieces"
+    if "stitching" in d:
+        return "stitching"
+    if "records" in d:
+        return "records"
+    if "sequences" in d:
+        return "sequences"
+    if "files" in d:
+        return "files"
+    if "inputs" in d:
+        return "inputs"
+    return desc
+
+
+def make_status_progress_bar(status_path: pathlib.Path) -> callable:
+    """
+    Vráti funkciu kompatibilnú s tqdm, ktorá:
+      - vytvorí tqdm progress bar
+      - pri update() raz za pár sekúnd zapíše progress/ETA do status súboru
+    """
+    MIN_INTERVAL = 5.0
+    last_write = {"t": 0.0}
+
+    def progress_bar(iterable, desc=None, *args, **kwargs):
+        pbar = tqdm(iterable, desc=desc, *args, **kwargs)
+
+        if desc is None:
+            return pbar
+
+        stage = _normalize_stage_name(desc)
+        orig_update = pbar.update
+
+        def update(n=1):
+            res = orig_update(n)
+            now = time.time()
+            if now - last_write["t"] >= MIN_INTERVAL:
+                try:
+                    total = pbar.total or 0
+                    current = pbar.n
+                    progress = float(current) / total if total else None
+
+                    # ETA z rate (iterácie/s): (total - n) / rate
+                    fd = getattr(pbar, "format_dict", {}) or {}
+                    rate = fd.get("rate", None)
+                    remaining = None
+                    if (
+                        total
+                        and current is not None
+                        and rate is not None
+                        and rate > 0
+                    ):
+                        remaining = (total - current) / rate
+
+                    patch = {
+                        "status": "running",
+                        "stage": stage,
+                        "progress": progress,
+                        "eta_seconds": remaining,
+                    }
+                    update_status_file(status_path, patch)
+                except Exception:
+                    traceback.print_exc()
+                last_write["t"] = now
+            return res
+
+        pbar.update = update
+        return pbar
+
+    return progress_bar
 
 
 def main():

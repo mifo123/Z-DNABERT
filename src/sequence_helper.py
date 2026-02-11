@@ -52,7 +52,6 @@ class SequenceHelper:
             progress_bar=tqdm,
             pad=16,
     ):
-        # Prazdny vstup
         if not np_seqs:
             return np.array([], dtype=np.float32)
 
@@ -60,6 +59,7 @@ class SequenceHelper:
         #    res = res[:-pad]; res = concat([res, seq])
         lengths = [len(seq) for seq in np_seqs]
 
+        # predalokácia podľa teórie (ako doteraz)
         total_len = 0
         for i, l in enumerate(lengths):
             if i == 0:
@@ -84,20 +84,27 @@ class SequenceHelper:
         for seq in progress_bar(np_seqs, 'stitching predictions'):
             l = len(seq)
             if first:
-                # prvý kus
+                if l > res.shape[0]:
+                    res = np.empty(l, dtype=dtype)
                 res[0:l] = seq
                 pos = l
                 first = False
-            else:
-                # res = res[:-pad] -> pos sa "skráti" o pad (nie pod 0)
-                new_pos = pos - pad
-                if new_pos < 0:
-                    new_pos = 0
-                # concat -> zapisujeme seq od new_pos
-                res[new_pos:new_pos + l] = seq
-                pos = new_pos + l
+                continue
 
-        # voliteľná kontrola
-        # assert pos == total_len
+            new_pos = pos - pad
+            if new_pos < 0:
+                new_pos = 0
 
-        return res
+            end = new_pos + l
+
+            # 🔥 kľúč: ak predalokácia nesedí, zväčši res (zriedkavé, ale zachráni job)
+            if end > res.shape[0]:
+                new_res = np.empty(end, dtype=dtype)
+                new_res[:pos] = res[:pos]
+                res = new_res
+
+            res[new_pos:end] = seq
+            pos = end
+
+        return res[:pos]
+

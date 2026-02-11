@@ -13,19 +13,25 @@ class PredictionRunner:
     def run(
         self,
         prediction_inputs: list[PredictionInput],
-        progress_bar = tqdm,
+        progress_bar=tqdm,
     ) -> Iterable[PredictionResult]:
-        for prediction_input in progress_bar(prediction_inputs, 'inputs'):
+        for prediction_input in progress_bar(prediction_inputs, "inputs"):
             model = prediction_input.get_model()
             prediction_input_files = prediction_input.get_files()
             sequence_variations = prediction_input.get_sequence_variations()
-            for prediction_input_file in progress_bar(prediction_input_files, 'files'):
+            for prediction_input_file in progress_bar(
+                prediction_input_files, "files"
+            ):
                 file_name = prediction_input_file.file_name
                 with prediction_input_file.open() as file_handle:
-                    for seq_record in progress_bar(SeqIO.parse(file_handle, 'fasta'), 'records'):
+                    for seq_record in progress_bar(
+                        SeqIO.parse(file_handle, "fasta"), "records"
+                    ):
                         seq = str(seq_record.seq)
                         seq_record_name = seq_record.name
-                        for sequence_variation in progress_bar(sequence_variations, 'sequences'):
+                        for sequence_variation in progress_bar(
+                            sequence_variations, "sequences"
+                        ):
                             yield self.run_on_prediction_input_seq_variation(
                                 model,
                                 seq,
@@ -42,7 +48,7 @@ class PredictionRunner:
         sequence_variation: SequenceVariation,
         file_name: str,
         seq_record_name: str,
-        progress_bar = tqdm,
+        progress_bar=tqdm,
     ) -> PredictionResult:
         seq = sequence_variation.create_variation(input_seq)
         seq_len = len(seq)
@@ -52,7 +58,7 @@ class PredictionRunner:
         stitched_preds = model.stitch_preds(preds, progress_bar)
         labeled, max_label = model.label_stitched_preds(stitched_preds)
         print("[DEBUG] label_stitched_preds finished, max_label=", max_label)
-        
+
         return PredictionResult(
             model.model_name,
             model.model_confidence_threshold,
@@ -65,4 +71,3 @@ class PredictionRunner:
             max_label,
             scores=stitched_preds,
         )
-        
